@@ -6,8 +6,9 @@ import { PubSubAsyncIterator } from './pubsub-async-iterator'
 
 export interface IKafkaOptions {
   topic: string,
-  host: string,
-  port: string,
+  metadataBrokerList?: string,
+  host?: string,
+  port?: string,
   logger?: Logger,
 }
 
@@ -25,19 +26,20 @@ const defaultLogger = Logger.createLogger({
 export class KafkaPubSub implements PubSubEngine {
   protected producer: any
   protected consumer: any
-  protected options: any
+  protected metadataBrokerList: string
   protected subscriptionMap: { [subId: number]: [string, Function] }
   protected channelSubscriptions: { [channel: string]: Array<number> }
   protected logger: Logger
 
   constructor(options: IKafkaOptions) {
-    this.options = options
+    this.logger = createChildLogger(
+      options.logger || defaultLogger, 'KafkaPubSub')
     this.subscriptionMap = {}
     this.channelSubscriptions = {}
-    this.producer = this.createProducer(this.options.topic)
-    this.consumer = this.createConsumer(this.options.topic)
-    this.logger = createChildLogger(
-      this.options.logger || defaultLogger, 'KafkaPubSub')
+    this.metadataBrokerList = options.metadataBrokerList
+      || `${options.host}:${options.port}`;
+    this.producer = this.createProducer(options.topic)
+    this.consumer = this.createConsumer(options.topic)
 
     this.consumer.on('data', (message) => {
       this.logger.info('Got message')
@@ -78,7 +80,7 @@ export class KafkaPubSub implements PubSubEngine {
 
   private createProducer(topic: string) {
     const producer = Kafka.Producer.createWriteStream({
-      'metadata.broker.list': `${this.options.host}:${this.options.port}`
+      'metadata.broker.list': this.metadataBrokerList
     }, {}, {topic})
     producer.on('error', (err) => {
       this.logger.error(err, 'Error in our kafka stream')
@@ -91,7 +93,7 @@ export class KafkaPubSub implements PubSubEngine {
     const randomGroupId = Math.ceil(Math.random() * 9999)
     const consumer = Kafka.KafkaConsumer.createReadStream({
       'group.id': `kafka-group-${randomGroupId}`,
-      'metadata.broker.list': `${this.options.host}:${this.options.port}`,
+      'metadata.broker.list': this.metadataBrokerList
     }, {}, {
       topics: [topic]
     });
