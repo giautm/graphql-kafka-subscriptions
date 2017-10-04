@@ -21,12 +21,13 @@ var defaultLogger = Logger.createLogger({
 var KafkaPubSub = (function () {
     function KafkaPubSub(options) {
         var _this = this;
-        this.options = options;
+        this.logger = child_logger_1.createChildLogger(options.logger || defaultLogger, 'KafkaPubSub');
         this.subscriptionMap = {};
         this.channelSubscriptions = {};
-        this.producer = this.createProducer(this.options.topic);
-        this.consumer = this.createConsumer(this.options.topic);
-        this.logger = child_logger_1.createChildLogger(this.options.logger || defaultLogger, 'KafkaPubSub');
+        this.metadataBrokerList = options.metadataBrokerList
+            || options.host + ":" + options.port;
+        this.producer = this.createProducer(options.topic);
+        this.consumer = this.createConsumer(options.topic);
         this.consumer.on('data', function (message) {
             _this.logger.info('Got message');
             _this.onMessage(JSON.parse(message.value.toString()));
@@ -65,7 +66,7 @@ var KafkaPubSub = (function () {
     KafkaPubSub.prototype.createProducer = function (topic) {
         var _this = this;
         var producer = Kafka.Producer.createWriteStream({
-            'metadata.broker.list': this.options.host + ":" + this.options.port
+            'metadata.broker.list': this.metadataBrokerList
         }, {}, { topic: topic });
         producer.on('error', function (err) {
             _this.logger.error(err, 'Error in our kafka stream');
@@ -76,7 +77,7 @@ var KafkaPubSub = (function () {
         var randomGroupId = Math.ceil(Math.random() * 9999);
         var consumer = Kafka.KafkaConsumer.createReadStream({
             'group.id': "kafka-group-" + randomGroupId,
-            'metadata.broker.list': this.options.host + ":" + this.options.port,
+            'metadata.broker.list': this.metadataBrokerList
         }, {}, {
             topics: [topic]
         });
